@@ -1,0 +1,9 @@
+v 3
+d CONSORT-like flowchart
+d The consort command provides a simple way to build a vertical flowchart, or a CONSORT-like flow diagram.
+d All diagram nodes are added step-by-step, and the user has full control over the contents of the data presented.
+d The flowchart is created as a standard Stata graph, and can be exported in any appropriate format.
+d The default output can be modified by added arrows and plots (e.g. for textboxes).
+d 
+d Program by Barna Szabó-Söderberg
+p consort Flexible production of vertical flowcharts and CONSORT-like flow diagrams.
