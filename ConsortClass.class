@@ -1,0 +1,96 @@
+version 19.0
+class ConsortClass {
+	double font_ratio=0.5 // mean character width per height for the actual font
+	double vertical_distance=2
+	double off_node_distance=2
+	double between_col_distance=4
+	double title_text_distance=0.2
+	double arrowsize=0.4
+	string arrowwidth="vthin"
+	array node_list
+}
+
+program .Add, rclass
+	syntax, [title(string) text(string)] [parent_node(integer 0) hide offnode direction(integer 0) titlesize(real 1) textsize(real 0.85) margin_v(real 0.2) margin_h(real 0.5) bgcolor(string) bwidth(string) bcolor(string) align(string) replace node_id(integer 0) hidearrow shift(real 0) width_multiplier(real 1)]
+	local index=0
+	if "`node_id'"!="0" {
+		forvalues i=1/`.node_list.arrnels' {
+			if `.node_list[`i'].node_id'==`node_id' local index=`i'
+		}
+	}
+	local found_at=`index'
+	if ("`replace'"!="replace") & (`index'!=0) {
+		noisily di as error "The requested {it:node_id} already exists. Use the {opt replace} option to replace it."
+		error 198
+	}
+	if `index'==0 local index=`.node_list.arrnels'+1
+	.node_list[`index']=.consort_node.new
+	if `found_at'==0 {
+		// if this is not a replace, rather adding a new node, allow setting parent_node and specify node_id
+		.node_list[`index'].node_id=`index'
+		.node_list[`index'].parent_node=`parent_node'
+	}
+	.node_list[`index'].off_node=("`offnode'"!="")
+	.node_list[`index'].off_node_direction=`direction'
+	.node_list[`index'].visible=("`hide'"=="")
+	.node_list[`index'].title_size=`titlesize'
+	.node_list[`index'].text_size=`textsize'
+	.node_list[`index'].margin_vertical=`margin_v'
+	.node_list[`index'].margin_horizontal=`margin_h'
+	.node_list[`index'].shift=`shift'
+	.node_list[`index'].width_multiplier=`width_multiplier'
+	.node_list[`index'].node_title=`"`title'"'
+	.node_list[`index'].node_text=`"`text'"'
+	.node_list[`index'].background_color=`"`bgcolor'"'
+	.node_list[`index'].border_width=`"`bwidth'"'
+	.node_list[`index'].border_color=`"`bcolor'"'
+	.node_list[`index'].align=`"`align'"'
+	.node_list[`index'].hidearrow=("`hidearrow'"=="hidearrow")
+	return scalar node_id=`index'
+end
+
+program .ToDataset
+	syntax, frame(string asis)
+	frame `frame': {
+		drop _all
+		set obs `.node_list.arrnels'
+		generate long node_id=.
+		generate long parent_node=.
+		generate byte off_node=.
+		generate byte off_node_direction=.
+		generate byte visible=.
+		generate byte hidearrow=.
+		generate double title_size=.
+		generate double text_size=.
+		generate double margin_vertical=.
+		generate double margin_horizontal=.
+		generate double shift=.
+		generate double width_multiplier=.
+		generate strL node_title=""
+		generate strL node_text=""
+		generate strL background_color=""
+		generate strL border_width=""
+		generate strL border_color=""
+		generate strL align=""
+		forvalues i=1/`.node_list.arrnels' {
+			replace node_id=round(`.node_list[`i'].node_id') in `i'
+			replace parent_node=round(`.node_list[`i'].parent_node') in `i'
+			replace off_node=round(`.node_list[`i'].off_node') in `i'
+			replace off_node_direction=round(`.node_list[`i'].off_node_direction') in `i'
+			replace visible=round(`.node_list[`i'].visible') in `i'
+			replace hidearrow=round(`.node_list[`i'].hidearrow') in `i'
+			replace title_size=`.node_list[`i'].title_size' in `i'
+			replace text_size=`.node_list[`i'].text_size' in `i'
+			replace margin_vertical=`.node_list[`i'].margin_vertical' in `i'
+			replace margin_horizontal=`.node_list[`i'].margin_horizontal' in `i'
+			replace shift=`.node_list[`i'].shift' in `i'
+			replace width_multiplier=`.node_list[`i'].width_multiplier' in `i'
+			replace node_title=`"`.node_list[`i'].node_title'"' in `i'
+			replace node_text=`"`.node_list[`i'].node_text'"' in `i'
+			replace background_color=`"`.node_list[`i'].background_color'"' in `i'
+			replace border_width=`"`.node_list[`i'].border_width'"' in `i'
+			replace border_color=`"`.node_list[`i'].border_color'"' in `i'
+			replace align=`"`.node_list[`i'].align'"' in `i'
+		}
+	}
+end

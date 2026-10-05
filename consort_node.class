@@ -1,0 +1,21 @@
+version 19.0
+class consort_node {
+	double node_id
+	double parent_node
+	double off_node=0
+	double off_node_direction=0
+	double visible=1
+	double title_size=1
+	double text_size=0.85
+	double margin_vertical=0.2
+	double margin_horizontal=0.5
+	double shift=0
+	double width_multiplier=1
+	double hidearrow=0
+	string node_title=""
+	string node_text=""
+	string background_color="bg"
+	string border_width="vthin"
+	string border_color="black"
+	string align="left"
+}
