@@ -1,8 +1,8 @@
 // consort ado
 //# Main command
-*! version 1.1 (Barna Szabó-Söderberg 2026.08.22)
+*! version 1.2 (Barna Szabó-Söderberg 2026.10.26)
 program consort, rclass
-	version 19.0
+	version 16.0
 	gettoken subcommand 0 : 0 , parse(", ")
 	local unrecognized=1
 	if inlist(`"`subcommand'"',"init","begin","open","start") {
@@ -28,7 +28,7 @@ end
 
 //# Check existence of a consort class
 program check_existence, rclass
-	version 19.0
+	version 16.0
 	quietly classutil dir .Consort
 	if "`r(list)'"=="" {
 		return scalar exists=0
@@ -41,7 +41,7 @@ end
 
 //# Init
 program consort_init
-	version 19.0
+	version 16.0
 	syntax , [FRatio(real 0.5) VERTical_distance(real 2) OFF_node_distance(real 2) BETWeen_col_distance(real 4)]
 	capture classutil drop .Consort
 	.Consort=.ConsortClass.new
@@ -53,7 +53,7 @@ end
 
 //# Add
 program consort_add, rclass
-	version 19.0
+	version 16.0
 	capture syntax , title(string) [text(string)] [PARent_node(integer 0) OFFNode right ///
 		hide HIDEArrow TITLESize(real 1) ///
 		TEXTSize(real 0.85) margin_v(real 0.2) margin_h(real 0.5) ///
@@ -98,21 +98,23 @@ end
 
 //# Draw
 program consort_draw, rclass
-	version 19.0
+	version 16.0
 	// the barely documented frame() option allows debugging
-	syntax, [wide addplot_bg(string asis) addplot_fg(string asis) name(string asis) frame(string) bottommargin(real 2) barbsize(string asis) text_gap(real 0) arrow(numlist)*]
+	
+	// extract the arrow list as repeatable option
+	rep_options arrow, optsonly: `*'
+	local arrowlist=`"`r(list)'"'
+	local arrowlist_n=r(n)
+	if `"`arrowlist'"'!="" {
+		// assert `arrow' contains correct direction marker and correct number of coordinates
+		check_arrows, arrows(`arrowlist')
+	}
+	
+	syntax, [wide nodraw addplot_bg(string asis) addplot_fg(string asis) name(string asis) frame(string) bottommargin(real 1.5) barbsize(string asis) text_gap(real 0) *]
 	check_existence
 	if r(exists)==0 {
 		noisily di as error "No consort diagram is defined yet."
 		error 199
-	}
-	// assert `arrow' contains correct number of coordinates
-	if "`arrow'"!="" {
-		capture assert mod(`: word count `arrow'',4)==0
-		if _rc!=0 {
-			noisily di as error "Number of arrow coordinates is incorrect."
-			error 199
-		}
 	}
 	if "`barbsize'"=="" local barbsize="medsmall"
 	if `"`frame'"'=="" {
@@ -243,8 +245,7 @@ program consort_draw, rclass
 			forvalues j=1/`maxcol' {
 				quietly summarize node_id if rownum==`i' & colnum==`j' & off_node==0, meanonly
 				local node=r(mean)
-				quietly summarize midline if parent_node==`node' & off_node==0, meanonly
-				quietly replace midline=(r(max)+r(min))/2 if node_id==`node'
+				set_parent_midline, node(`node')
 			}
 		}
 		// copy midlines of parent node for all off-nodes
@@ -287,6 +288,80 @@ program consort_draw, rclass
 			// xscale is now the percent width per character horizontally that is needed to avoid overlaps
 		}
 		else { // narrow format requested
+			// --- propagate parent half-widths down to the last row ---
+			// half_left/half_right: allocated half-widths of each main node,
+			// including its off-nodes (node_width_left/right stay untouched,
+			// because they are still needed for the box coordinates later)
+			tempvar owner sortorder
+			quietly generate long `sortorder'=_n
+			quietly generate long `owner'=cond(off_node==1,parent_node,node_id)
+			quietly bysort `owner': egen double half_left=max(node_width_left)
+			quietly bysort `owner': egen double half_right=max(node_width_right)
+			quietly replace half_left=. if off_node==1
+			quietly replace half_right=. if off_node==1
+			sort `sortorder'
+
+			quietly summarize rownum, meanonly
+			local maxrows=r(max)
+			forvalues i=1/`=`maxrows'-1' {
+				quietly levelsof node_id if rownum==`i' & off_node==0, local(plist)
+				foreach p of local plist {
+					// outermost children of p (children of one parent have contiguous colnums)
+					quietly summarize colnum if parent_node==`p' & off_node==0, meanonly
+					if r(N)==0 continue
+					local cmin=r(min)
+					local cmax=r(max)
+					local k=r(N)
+
+					// target column the parent is aligned to
+					if mod(`k',2)==1 {
+						local mcol=(`cmin'+`cmax')/2
+					}
+					else {
+						local mcol=.
+					}
+
+					// guaranteed minimum distances from the outermost children's midlines
+					// to the parent midline (left: Dl, right: Dr)
+					if `k'==1 {
+						local Dl=0
+						local Dr=0
+					}
+					else if `mcol'<. {
+						// parent sits on the middle child
+						quietly summarize half_right if parent_node==`p' & off_node==0 & colnum>=`cmin' & colnum<`mcol', meanonly
+						local Dl=r(sum)
+						quietly summarize half_left if parent_node==`p' & off_node==0 & colnum>`cmin' & colnum<=`mcol', meanonly
+						local Dl=`Dl'+r(sum)+(`mcol'-`cmin')*`.Consort.between_col_distance'
+						quietly summarize half_right if parent_node==`p' & off_node==0 & colnum>=`mcol' & colnum<`cmax', meanonly
+						local Dr=r(sum)
+						quietly summarize half_left if parent_node==`p' & off_node==0 & colnum>`mcol' & colnum<=`cmax', meanonly
+						local Dr=`Dr'+r(sum)+(`cmax'-`mcol')*`.Consort.between_col_distance'
+					}
+					else {
+						// parent centred between the outermost children
+						quietly summarize half_right if parent_node==`p' & off_node==0 & colnum>=`cmin' & colnum<`cmax', meanonly
+						local D=r(sum)
+						quietly summarize half_left if parent_node==`p' & off_node==0 & colnum>`cmin' & colnum<=`cmax', meanonly
+						local D=`D'+r(sum)+(`k'-1)*`.Consort.between_col_distance'
+						local Dl=`D'/2
+						local Dr=`D'/2
+					}
+
+					// parent's half-widths
+					quietly summarize half_left if node_id==`p', meanonly
+					local pl=r(mean)
+					quietly summarize half_right if node_id==`p', meanonly
+					local pr=r(mean)
+
+					// widen the outer halves of the outermost children if the parent sticks out
+					quietly replace half_left=max(half_left,`pl'-`Dl') ///
+						if parent_node==`p' & off_node==0 & colnum==`cmin'
+					quietly replace half_right=max(half_right,`pr'-`Dr') ///
+						if parent_node==`p' & off_node==0 & colnum==`cmax'
+				}
+			}
+
 			local xscale=0
 			tempname calc_mat
 			quietly summarize rownum, meanonly
@@ -296,7 +371,7 @@ program consort_draw, rclass
 			matrix `calc_mat'=J(5,`=`maxcol'+1',.) // to collect last row space allocation
 			matrix rownames `calc_mat'="midline_l" "midline_r" "segment_width" "cumulative" "new_midline"
 
-			// collect last row distribution (assuming that the widths after the last split represent the widest ones)
+			// collect last row distribution (parent widths have been propagated down to the last row above)
 			tempname midlines
 			quietly levelsof midline if rownum==`maxrows', matrow(`midlines')
 			local x=r(r)+1
@@ -313,10 +388,10 @@ program consort_draw, rclass
 			tempname segment_width
 			forvalues i=1/`=`maxcol'+1' {
 				// check allocated width to the left from actual midline
-				quietly summarize node_width_right if midline==`calc_mat'[1,`i']
+				quietly summarize half_right if rownum==`maxrows' & off_node==0 & midline==`calc_mat'[1,`i']
 				if "`r(max)'"!="" scalar `segment_width'=r(max)
 					else scalar `segment_width'=0
-				quietly summarize node_width_left if midline==`calc_mat'[2,`i']
+				quietly summarize half_left if rownum==`maxrows' & off_node==0 & midline==`calc_mat'[2,`i']
 				if "`r(max)'"!="" scalar `segment_width'=`segment_width'+r(max)
 				if `calc_mat'[1,`i']!=0 & `calc_mat'[2,`i']!=100 scalar `segment_width'=`segment_width'+`.Consort.between_col_distance'
 				matrix `calc_mat'[3,`i']=`segment_width'	
@@ -344,8 +419,7 @@ program consort_draw, rclass
 				forvalues j=1/`maxcol' {
 					quietly summarize node_id if rownum==`i' & colnum==`j' & off_node==0, meanonly
 					local node=r(mean)
-					quietly summarize midline if parent_node==`node' & off_node==0, meanonly
-					quietly replace midline=(r(max)+r(min))/2 if node_id==`node'
+					set_parent_midline, node(`node')
 				}
 			}
 			// copy midlines of parent node for all off-nodes
@@ -417,19 +491,22 @@ program consort_draw, rclass
 		// yscale is the percent height of a single row (==1 unit text height)
 		local ysize=10
 		local xsize=`ysize'*`yscale'/`xscale'*`.Consort.font_ratio'
-		if `xsize'<`ysize' {
+/*		if `xsize'<`ysize' {
 			local rs_scale=`yscale'
 		}
 		else {
 			local rs_scale=`yscale'
 		}
-		if `xsize'>100 {
+*/		if `xsize'>100 {
 			local ysize=`ysize'*100/`xsize'
 			local xsize=100
 		}
-
+		// convert y-units (1/104 of the plot height, because of range(-2 102))
+		// to rs units (percent of min(graph width, graph height))
+		local rs_scale=`yscale'*(100/104)*`ysize'/min(`xsize',`ysize')
+		
 		// put the twoway command together
-		local extras=" graphregion(margin(medium)) plotregion(margin(zero)) xscale(off range(0 100)) xlabel(,nogrid) yscale(off range(0 100)) ylabel(,nogrid) legend(off) "
+		local extras=" graphregion(margin(zero)) plotregion(margin(zero)) xscale(off range(-2 102)) xlabel(,nogrid) yscale(off range(-2 102)) ylabel(,nogrid) legend(off) "
 		local extras_bg=" msymbol(none) lcolor(black) lwidth(vthin) "
 		local extras_line=" msymbol(none) lcolor(black) legend(off) "
 
@@ -603,43 +680,70 @@ program consort_draw, rclass
 				
 			}
 		}
+		
+		custom_arrows, lines("`lines_yx'") arrow("`arrow_yx'") arrowlist(`arrowlist')
+		
 		if "`lines_yx'"!="" {
 			local line_plots=`"(pci `lines_yx', `extras_line' lwidth(`.Consort.arrowwidth'))"'
 		}
 		if "`arrow_yx'"!="" {
-			local arrow_plots=`"(pci `arrow_yx' `arrow', msize(`=`.Consort.arrowsize'*`rs_scale'') mcolor(black) lcolor(black) lwidth(`.Consort.arrowwidth') barbsize(`barbsize') recast(pcarrow))"'
+			local arrow_plots=`"(pci `arrow_yx', msize(`=`.Consort.arrowsize'*`rs_scale'') mcolor(black) lcolor(black) lwidth(`.Consort.arrowwidth') barbsize(`barbsize') recast(pcarrow))"'
 		}
 
 		// draw all
-		twoway `addplot_bg' `boxes' `line_plots' `arrow_plots' `addplot_fg' , `extras' `text_yx' ysize(`ysize') xsize(`xsize') name(`name')
+		if "`draw'"=="" { // not "nodraw"
+			twoway `addplot_bg' `boxes' `line_plots' `arrow_plots' `addplot_fg' , `extras' `text_yx' ysize(`ysize') xsize(`xsize') name(`name')
+		}
 
 		// return coordinates and text size
 		return clear
 		return scalar text_size_unit=`rs_scale'
 		tempname ret_matrix
-		matrix `ret_matrix'=J(`=_N',5,.)
-		matrix colnames `ret_matrix'="node_id" "left" "right" "top" "bottom" 
+		matrix `ret_matrix'=J(`=_N',7,.)
+		matrix colnames `ret_matrix'="node_id" "left" "right" "top" "bottom" "mid_x" "mid_y"
+		local rn=""
 		forvalues i=1/`=_N' {
+			local rn=`"`rn' "n`=node_id[`i']'""'
 			matrix `ret_matrix'[`i',1]=node_id[`i']
 			matrix `ret_matrix'[`i',2]=c_left[`i']
 			matrix `ret_matrix'[`i',3]=c_right[`i']
 			matrix `ret_matrix'[`i',4]=c_top[`i']
 			matrix `ret_matrix'[`i',5]=c_bottom[`i']
+			matrix `ret_matrix'[`i',6]=(c_left[`i']+c_right[`i'])/2
+			matrix `ret_matrix'[`i',7]=(c_top[`i']+c_bottom[`i'])/2
 		}
+		matrix rownames `ret_matrix'=`rn'
 		return matrix coordinates=`ret_matrix'
 	}
 end
 
 program define get_parent_col
-	version 19.0
+	version 16.0
 	syntax anything, local(string asis)
 	quietly summarize colnum if node_id==`anything', meanonly
 	c_local `local'=r(mean)
 end
 
+//# Parent midline (centred between outermost children, or on the middle child)
+program define set_parent_midline
+	version 16.0
+	syntax , node(integer)
+	tempname mid
+	quietly summarize midline if parent_node==`node' & off_node==0, meanonly
+	scalar `mid'=(r(max)+r(min))/2
+	quietly summarize colnum if parent_node==`node' & off_node==0, meanonly
+	if mod(r(N),2)==1 {
+		// children of one parent have contiguous colnums, so the middle one is at the mean
+		local midcol=(r(min)+r(max))/2
+		quietly summarize midline if parent_node==`node' & off_node==0 & colnum==`midcol', meanonly
+		scalar `mid'=r(mean)
+	}
+	quietly replace midline=scalar(`mid') if node_id==`node'
+end
+
 //# String dimensions 
 program define string_dimensions, rclass
-	version 19.0
+	version 16.0
 	syntax anything, [feedback]
 	if "`feedback'"=="feedback" noisily di as result _asis `"`anything'"'
 	local rowcount=0
@@ -685,4 +789,69 @@ program define string_dimensions, rclass
 	}
 	return scalar width=`stringwidth'
 	return scalar lines=`rowcount'
+end
+
+program define check_arrows
+	version 16.0
+	syntax, arrows(string asis)
+	foreach i of local arrows {
+		local s=`"`i'"'
+		gettoken direction i:i
+		local i=strltrim(`"`i'"')
+		capture {
+			assert inlist(`"`direction'"',"s","vh","hv","vhv","hvh")
+			assert `:word count `i''==4
+			forvalues j=1/4 {
+				confirm number `:word `j' of `i''
+			}
+		}
+		if _rc!=0 {
+			noisily di as error `"The arrow(`s') option is invalid."'
+			exit 197
+		}
+	}
+end
+
+program define custom_arrows
+	version 16.0
+	syntax, lines(string asis) arrow(string asis) [arrowlist(string asis)]
+	local arrow=subinstr(`"`arrow'"',`"""',"",.)
+	local lines=subinstr(`"`lines'"',`"""',"",.)
+	foreach i of local arrowlist {
+		gettoken direction i:i
+		local i=strltrim(`"`i'"')
+		gettoken start_y i:i
+		local i=strltrim(`"`i'"')
+		gettoken start_x i:i
+		local i=strltrim(`"`i'"')
+		gettoken end_y i:i
+		local end_x=strltrim(`"`i'"')
+		
+		// convert to straight or split arrows according to direction
+		if "`direction'"=="s" {
+			local arrow=`"`arrow' `start_y' `start_x' `end_y' `end_x'"'
+		}
+		if "`direction'"=="hv" {
+			local lines=`"`lines' `start_y' `start_x' `start_y' `end_x'"'
+			local arrow=`"`arrow' `start_y' `end_x' `end_y' `end_x'"'
+		}
+		if "`direction'"=="vh" {
+			local lines=`"`lines' `start_y' `start_x' `end_y' `start_x'"'
+			local arrow=`"`arrow' `end_y' `start_x' `end_y' `end_x'"'
+		}
+		if "`direction'"=="hvh" {
+			local mid_x=(`start_x'+`end_x')/2
+			local lines=`"`lines' `start_y' `start_x' `start_y' `mid_x' `start_y' `mid_x' `end_y' `mid_x'"'
+			local arrow=`"`arrow' `end_y' `mid_x' `end_y' `end_x'"'
+		}
+		if "`direction'"=="vhv" {
+			local mid_y=(`start_y'+`end_y')/2
+			local lines=`"`lines' `start_y' `start_x' `mid_y' `start_x' `mid_y' `start_x' `mid_y' `end_x'"'
+			local arrow=`"`arrow' `mid_y' `end_x' `end_y' `end_x'"'
+		}
+	}
+	
+	
+	c_local lines_yx="`lines'"
+	c_local arrow_yx="`arrow'"
 end
