@@ -69,10 +69,11 @@
 {synopt:{opt wide}}Force wide format instead of the default narrow format.{p_end}
 {synopt:{opt addplot_bg(twoway_plot)}}Additional plot to be added to the background of the CONSORT diagram.{p_end}
 {synopt:{opt addplot_fg(twoway_plot)}}Additional plot to be added to the foreground of the CONSORT diagram.{p_end}
-{synopt:{opt bottommargin(#)}}The relative height of the within-node margin below the text compared to above the text (default=2).{p_end}
+{synopt:{opt bottommargin(#)}}The relative height of the within-node margin below the text compared to above the text (default=1.5).{p_end}
 {synopt:{opt text_gap(#)}}The size of the gap between all title and text rows (default=0).{p_end}
-{synopt:{opt arrow(coords [coords [...]])}}Start and end coordinates for additional arrows.{p_end}
+{synopt:{opt arrow(arrowspec)}}Repeatable option. Direction, start and end coordinates for additional arrows.{p_end}
 {synopt:{cmd:barbsize(}{help markersizestyle}{cmd:)}}The filling of the arrowheads, as specified in the {opt barbsize} option of {help twoway pcarrow}.{p_end}
+{synopt:{cmd:nodraw}}Calculate node and text positions without actually drawing the graph. Used to obtain coordinates only, for the purpose of positioning custom arrows and added plots.{p_end}
 {synopt:{cmd:name(}{it:{help name_option:name,...}}{cmd:)}}Name of the new graph.{p_end}
 {synopt:{opt frame(newframename)}}Programmer's option to support debugging. Stores temporary data in a new, permanent frame.{p_end}
 {synoptline}
@@ -190,10 +191,14 @@ drawn character image (to account for potential hyphens). Therefore nodes look w
 {opt text_gap(#)} The size of the gap between all title and text rows, specified in character heights (default=0). Increase it in case the text seems vertically crowded.{p_end}
 
 {phang}
-{opt arrow(coords [coords [...]])} Start and end coordinates for additional arrows. {it:coords} is specified as bunches of 4 numbers (y1 x1 y2 x2) representing the start and end coordinates of straight arrows.{p_end}
+{opt arrow(arrowspec)} Repeatable option. Direction, start and end coordinates for additional arrows. {it:arrowspec} is specified as a text (s|hv|vh|vhv|hvh) describing the direction of the arrow (s:straight, 
+hv:horizontal-vertical, vh:vertical-horizontal, hvh:horizontal-vertical-horizontal, vhv:vertical-horizontal-vertical) followed by 4 numbers (y1 x1 y2 x2) representing the start and end coordinates of the arrow.{p_end}
 
 {phang}
 {cmd:barbsize(}{it:{help markersizestyle}}{cmd:)} The filling of the arrowheads connecting the nodes. Alternatives are given as in the {opt barbsize} option of {help twoway pcarrow}.
+
+{phang}
+{cmd:nodraw} Calculate node and text positions without actually drawing the graph. Used to obtain coordinates only, for the purpose of positioning custom arrows and added plots.{p_end}
 
 {phang}
 {cmd:name(}{it:{help name_option:name,...}}{cmd:)} Name of the new graph.
@@ -253,30 +258,30 @@ by inserting the {it:{break}} marker as line breaks. Graph specific {help smcl} 
 {phang}{title:Example 2:} {it:Study design flowchart for a randomized crossover trial.}{p_end}
 {phang}{cmd:. consort init}{p_end}
 
-{phang}{cmd:. consort add, title("{bf:Enrollment}") text("") local(n1) align(center)}{p_end}
+{phang}{cmd:. consort add, title("Enrollment") text("") local(n1) align(center)}{p_end}
 
-{phang}{cmd:. consort add, title("{bf:Randomization}") text("") local(n2) parent_node(`n1') align(center)}{p_end}
+{phang}{cmd:. consort add, title("Randomization") text("") local(n2) parent_node(`n1') width_multiplier(1.1) align(center)}{p_end}
 
-{phang}{cmd:. consort add, title("{bf:Drug A}") text("") local(n3) parent_node(`n2') align(center)}{p_end}
+{phang}{cmd:. consort add, title("Drug A") text("") local(n3) parent_node(`n2') align(center)}{p_end}
 
-{phang}{cmd:. consort add, title("{bf:Drug B}") text("") local(n4) parent_node(`n2') align(center)}{p_end}
+{phang}{cmd:. consort add, title("Drug B") text("") local(n4) parent_node(`n2') align(center)}{p_end}
 
-{phang}{cmd:. consort add, title("{bf:Washout}") text("") local(n5) parent_node(`n3') align(center) hidearrow}{p_end}
+{phang}{cmd:. consort add, title("Washout") text("") local(n5) parent_node(`n3') align(center) width_multiplier(1.1) hidearrow}{p_end}
 
-{phang}{cmd:. consort add, title("{bf:Washout}") text("") local(n6) parent_node(`n4') align(center) hidearrow}{p_end}
+{phang}{cmd:. consort add, title("Washout") text("") local(n6) parent_node(`n4') align(center) width_multiplier(1.1) hidearrow}{p_end}
 
-{phang}{cmd:. consort add, title("{bf:Drug B}") text("") local(n7) parent_node(`n5') align(center)}{p_end}
+{phang}{cmd:. consort add, title("Drug B") text("") local(n7) parent_node(`n5') align(center)}{p_end}
 
-{phang}{cmd:. consort add, title("{bf:Drug A}") text("") local(n8) parent_node(`n6') align(center)}{p_end}
+{phang}{cmd:. consort add, title("Drug A") text("") local(n8) parent_node(`n6') align(center)}{p_end}
 
-{phang}{cmd:. consort draw, name(crossover,replace) bottommargin(2) text_gap(0.1)}{p_end}
+{phang}{cmd:. consort draw, name(crossover,replace) nodraw text_gap(0.1)}{p_end}
 
-{phang}{cmd:. local yx1=`"`=r(coordinates)[5,"bottom"]' `=r(coordinates)[5,"right"]'"'}{p_end}
+{phang}{cmd:. local yx1=`"`=r(coordinates)["n5","bottom"]' `=r(coordinates)["n5","mid_x"]'"'}{p_end}
 
-{phang}{cmd:. local yx2=`"`=r(coordinates)[8,"top"]' `=r(coordinates)[8,"left"]'"'}{p_end}
+{phang}{cmd:. local yx2=`"`=r(coordinates)["n8","top"]' `=r(coordinates)["n8","mid_x"]'"'}{p_end}
 
-{phang}{cmd:. local yx3=`"`=r(coordinates)[6,"bottom"]' `=r(coordinates)[6,"left"]'"'}{p_end}
+{phang}{cmd:. local yx3=`"`=r(coordinates)["n6","bottom"]' `=r(coordinates)["n6","mid_x"]'"'}{p_end}
 
-{phang}{cmd:. local yx4=`"`=r(coordinates)[7,"top"]' `=r(coordinates)[7,"right"]'"'}{p_end}
+{phang}{cmd:. local yx4=`"`=r(coordinates)["n7","top"]' `=r(coordinates)["n7","mid_x"]'"'}{p_end}
 
-{phang}{cmd:. consort draw, name(crossover,replace) bottommargin(2) text_gap(0.1) arrow(`yx1' `yx2' `yx3' `yx4')}{p_end}
+{phang}{cmd:. consort draw, name(crossover,replace) text_gap(0.1) arrow(s `yx1' `yx2') arrow(s `yx3' `yx4')}{p_end}
