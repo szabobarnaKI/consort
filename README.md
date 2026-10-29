@@ -10,5 +10,11 @@ To install the command, run the following command in Stata:
 ##
     net from "https://szabobarnaki.github.io/consort/"
 
-### Examples created using `consort`:
-![Minimalistic flowchart displaying a crossover trial design](https://szabobarnaki.github.io/consort/crossover.jpg)
+##
+Examples created using `consort`:
+
+<img src="https://szabobarnaki.github.io/consort/crossover.jpg" alt="Minimalistic flowchart displaying a crossover trial design" width="300"/>
+
+<img src="https://szabobarnaki.github.io/consort/rct.jpg" alt="CONSORT-flowchart for a made-up randomized trial" width="600"/>
+
+<img src="https://szabobarnaki.github.io/consort/horse.jpg" alt="Decision pathway to determine whether you are a horse" width="600"/>
