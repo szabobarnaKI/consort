@@ -1,6 +1,6 @@
 // consort ado
 //# Main command
-*! version 1.2 (Barna Szabó-Söderberg 2026.10.26)
+*! version 1.3 (Barna Szabó-Söderberg 2026.11.01)
 program consort, rclass
 	version 16.0
 	gettoken subcommand 0 : 0 , parse(", ")
@@ -85,7 +85,7 @@ program consort_add, rclass
 		error 198
 	} 
 	if `"`bgcolor'"'=="" local bgcolor="bg"
-	if `"`bcolor'"'=="" local bcolor="black"
+	if `"`bcolor'"'=="" local bcolor="foreground"
 	if `"`bwidth'"'=="" local bwidth="vthin"
 	if `"`align'"'=="" local align="left"
 	local direction=("`right'"=="right")
@@ -110,7 +110,7 @@ program consort_draw, rclass
 		check_arrows, arrows(`arrowlist')
 	}
 	
-	syntax, [wide nodraw addplot_bg(string asis) addplot_fg(string asis) name(string asis) frame(string) bottommargin(real 1.5) barbsize(string asis) text_gap(real 0) *]
+	syntax, [wide nodraw addplot_bg(string asis) addplot_fg(string asis) name(string asis) frame(string) bottommargin(real 1.5) barbsize(string asis) text_gap(real 0) CORNERradius(real 0) *]
 	check_existence
 	if r(exists)==0 {
 		noisily di as error "No consort diagram is defined yet."
@@ -507,21 +507,22 @@ program consort_draw, rclass
 		
 		// put the twoway command together
 		local extras=" graphregion(margin(zero)) plotregion(margin(zero)) xscale(off range(-2 102)) xlabel(,nogrid) yscale(off range(-2 102)) ylabel(,nogrid) legend(off) "
-		local extras_bg=" msymbol(none) lcolor(black) lwidth(vthin) "
-		local extras_line=" msymbol(none) lcolor(black) legend(off) "
+		local extras_bg=" msymbol(none) lcolor(foreground) lwidth(vthin) "
+		local extras_line=" msymbol(none) lcolor(foreground) legend(off) "
 
 		// all nodes are added as separate plots for background and border for each node, to allow individual styles
+		// rounded node boxes; cornerradius() is in text-row heights (0 = square)
 		local boxes=""
-		// add box backgrounds
+		local rr_ratio=`xsize'/`ysize'          // keeps corners circular on the page
+		local rr_rx=`cornerradius'*`yscale'/`rr_ratio'
 		forvalues i=1/`=_N' {
 			if visible[`i']==1 {
-				local boxes=`"`boxes' (scatteri `=c_top[`i']' `=c_left[`i']' `=c_top[`i']' `=c_right[`i']' `=c_bottom[`i']' `=c_right[`i']' `=c_bottom[`i']' `=c_left[`i']', `extras_bg' nodropbase fcolor(`=background_color[`i']') recast(area))"'
-			}
-		}
-		// add box borders
-		forvalues i=1/`=_N' {
-			if visible[`i']==1 {
-				local boxes=`"`boxes' (scatteri `=c_top[`i']' `=c_left[`i']' `=c_top[`i']' `=c_right[`i']' `=c_bottom[`i']' `=c_right[`i']' `=c_bottom[`i']' `=c_left[`i']' `=c_top[`i']' `=c_left[`i']', msymbol(none) lcolor(`=border_color[`i']') lwidth(`=border_width[`i']') recast(connected))"'
+				roundbox node_box, left(`=c_left[`i']') right(`=c_right[`i']') ///
+					bottom(`=c_bottom[`i']') top(`=c_top[`i']') ///
+					radius(`rr_rx') ratio(`rr_ratio') ///
+					fcolor(`=background_color[`i']') lcolor(`=border_color[`i']') ///
+					lwidth(`=border_width[`i']')
+				local boxes `"`boxes' `node_box'"'
 			}
 		}
 		
@@ -687,7 +688,7 @@ program consort_draw, rclass
 			local line_plots=`"(pci `lines_yx', `extras_line' lwidth(`.Consort.arrowwidth'))"'
 		}
 		if "`arrow_yx'"!="" {
-			local arrow_plots=`"(pci `arrow_yx', msize(`=`.Consort.arrowsize'*`rs_scale'') mcolor(black) lcolor(black) lwidth(`.Consort.arrowwidth') barbsize(`barbsize') recast(pcarrow))"'
+			local arrow_plots=`"(pci `arrow_yx', msize(`=`.Consort.arrowsize'*`rs_scale'') mcolor(foreground) lcolor(foreground) lwidth(`.Consort.arrowwidth') barbsize(`barbsize') recast(pcarrow))"'
 		}
 
 		// draw all
@@ -854,4 +855,113 @@ program define custom_arrows
 	
 	c_local lines_yx="`lines'"
 	c_local arrow_yx="`arrow'"
+end
+
+program define roundbox, rclass
+    version 16.0
+
+    syntax anything(name=mac id="local macro name"),          ///
+        left(real) right(real) bottom(real) top(real)          ///
+        [ radius(real 0) ratio(real 1) npoints(integer 12)     ///
+          LColor(string asis) LWidth(string)                   ///
+          FColor(string asis) OPTions(string asis) NOPARen ]
+
+    // ---- checks ------------------------------------------------------------
+    confirm name `mac'
+    if `: word count `mac'' != 1 {
+        di as err "specify exactly one local macro name"
+        exit 198
+    }
+    if `left' >= `right' {
+        di as err "left() must be smaller than right()"
+        exit 198
+    }
+    if `bottom' >= `top' {
+        di as err "bottom() must be smaller than top()"
+        exit 198
+    }
+    if `radius' < 0 {
+        di as err "radius() must be nonnegative"
+        exit 198
+    }
+    if `ratio' <= 0 {
+        di as err "ratio() must be positive"
+        exit 198
+    }
+    if `npoints' < 2 {
+        di as err "npoints() must be at least 2"
+        exit 198
+    }
+
+    // ---- defaults ------------------------------------------------------------
+    if `"`lcolor'"' == "" local lcolor foreground
+    if `"`lwidth'"' == "" local lwidth vthin
+    if `"`fcolor'"' == "" local fcolor bg
+
+    // ---- corner radii, shrunk by a common factor if they exceed half a side ----
+    //      (a common factor keeps the corner shape when the box is small)
+    local rx = `radius'
+    local ry = `radius'*`ratio'
+    if `rx' > 0 {
+        local s = min(1, ((`right' - `left')/2)/`rx', ((`top' - `bottom')/2)/`ry')
+        local rx = `rx'*`s'
+        local ry = `ry'*`s'
+    }
+
+    // ---- coordinates (y x pairs, counter-clockwise from bottom-right) ----------
+    mata: st_local("pts", _roundbox_pts(`left', `right', `bottom', `top', ///
+                                         `rx', `ry', `npoints'))
+
+    // ---- assemble the layer -------------------------------------------------
+    local layer scatteri `pts', recast(area) nodropbase    ///
+        fcolor(`fcolor') lcolor(`lcolor') lwidth(`lwidth') `options'
+    if "`noparen'" == "" local layer (`layer')
+
+    c_local `mac' `"`layer'"'
+
+    return local layer  `"`layer'"'
+    return local coords `"`pts'"'
+    return scalar rx = `rx'
+    return scalar ry = `ry'
+    return scalar npoints = cond(`rx' > 0 & `ry' > 0, 4*`npoints', 4)
+end
+
+version 16.0
+mata:
+mata set matastrict on
+
+string scalar _roundbox_pts(real scalar x0, real scalar x1,
+                            real scalar y0, real scalar y1,
+                            real scalar rx, real scalar ry,
+                            real scalar n)
+{
+    real colvector t, ang, X, Y
+    real scalar    c, cx, cy
+
+    // square corners: just the four vertices
+    if (rx <= 0 | ry <= 0) {
+        X = (x0 \ x1 \ x1 \ x0)
+        Y = (y0 \ y0 \ y1 \ y1)
+    }
+    else {
+        t = (0::n-1) :/ (n-1) :* (pi()/2)
+        X = J(0, 1, .)
+        Y = J(0, 1, .)
+        // c: 0 = bottom-right, 1 = top-right, 2 = top-left, 3 = bottom-left
+        for (c = 0; c <= 3; c++) {
+            ang = t :+ (c - 1)*pi()/2
+            cx  = (c <= 1          ? x1 - rx : x0 + rx)
+            cy  = (c == 1 | c == 2 ? y1 - ry : y0 + ry)
+            X   = X \ (cx :+ rx :* cos(ang))
+            Y   = Y \ (cy :+ ry :* sin(ang))
+        }
+        // remove floating-point noise such as 6.1e-17
+        X = round(X, 1e-10)
+        Y = round(Y, 1e-10)
+    }
+
+    return(invtokens((strofreal(Y, "%15.0g") :+ " " :+
+                      strofreal(X, "%15.0g"))'))
+}
+
 end

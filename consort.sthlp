@@ -73,6 +73,7 @@
 {synopt:{opt text_gap(#)}}The size of the gap between all title and text rows (default=0).{p_end}
 {synopt:{opt arrow(arrowspec)}}Repeatable option. Direction, start and end coordinates for additional arrows.{p_end}
 {synopt:{cmd:barbsize(}{help markersizestyle}{cmd:)}}The filling of the arrowheads, as specified in the {opt barbsize} option of {help twoway pcarrow}.{p_end}
+{synopt:{opt corner:radius(#)}}The radius of curved node corners, measured in units of text row height.{p_end}
 {synopt:{cmd:nodraw}}Calculate node and text positions without actually drawing the graph. Used to obtain coordinates only, for the purpose of positioning custom arrows and added plots.{p_end}
 {synopt:{cmd:name(}{it:{help name_option:name,...}}{cmd:)}}Name of the new graph.{p_end}
 {synopt:{opt frame(newframename)}}Programmer's option to support debugging. Stores temporary data in a new, permanent frame.{p_end}
@@ -196,6 +197,9 @@ hv:horizontal-vertical, vh:vertical-horizontal, hvh:horizontal-vertical-horizont
 
 {phang}
 {cmd:barbsize(}{it:{help markersizestyle}}{cmd:)} The filling of the arrowheads connecting the nodes. Alternatives are given as in the {opt barbsize} option of {help twoway pcarrow}.
+
+{phang}
+{opt corner:radius(#)} The radius of curved node corners, measured in units of text row height.{p_end}
 
 {phang}
 {cmd:nodraw} Calculate node and text positions without actually drawing the graph. Used to obtain coordinates only, for the purpose of positioning custom arrows and added plots.{p_end}
